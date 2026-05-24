@@ -1,0 +1,23 @@
+{
+  "ORD-001": {
+    "content": "Your order ORD-001 is being processed and will ship within 2 business days.",
+    "toolCalls": [
+      { "name": "query_order", "arguments": { "orderId": "ORD-001" } }
+    ]
+  },
+  "ORD-999": {
+    "content": "I could not find order ORD-999 in our system. Could you double-check the order ID?",
+    "toolCalls": [
+      { "name": "query_order", "arguments": { "orderId": "ORD-999" } }
+    ]
+  },
+  "unhappy": {
+    "content": "I'm sorry to hear that. Let me look into this for you. Can you tell me more about what went wrong?",
+    "toolCalls": [
+      { "name": "query_order", "arguments": {} }
+    ]
+  },
+  "summary": {
+    "content": "{\"orderId\": \"ORD-050\", \"status\": \"shipped\", \"items\": 3}"
+  }
+}

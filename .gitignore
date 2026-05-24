@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.tsbuildinfo
+examples/*.js
+examples/*.js.map
