@@ -5,6 +5,37 @@ export default suite({
   name: "Customer Service Agent",
 
   cases: [
+    // ─── Parameterized: one template, multiple order IDs ───
+    {
+      name: "query $orderId → calls query_order and returns $expected",
+      params: [
+        { orderId: "ORD-001", expected: "business days" },
+        { orderId: "ORD-002", expected: "shipped" },
+        { orderId: "ORD-999", expected: "double-check" },
+      ],
+      input: {
+        systemPrompt:
+          "You are a customer service agent. Use the query_order tool to look up order details.",
+        messages: [
+          { role: "user", content: "What is the status of order $orderId?" },
+        ],
+        tools: [
+          {
+            name: "query_order",
+            description: "Look up an order by ID",
+            parameters: {},
+          },
+        ],
+      },
+      assertions: [
+        assertions.toolCalled("query_order"),
+        assertions.contains("$orderId"),
+        assertions.contains("$expected"),
+        assertions.latency(10000),
+      ],
+    },
+
+    // ─── Regular test cases ───
     {
       name: "queries order tool for valid order ID",
       input: {

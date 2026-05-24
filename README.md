@@ -404,6 +404,59 @@ console.log(Reporters.json(result));
 
 ---
 
+## 参数化测试
+
+用 `$paramName` 占位符定义测试模板，通过多行参数数据批量生成测试变体。
+
+```ts
+import { suite, assertions } from "agentest";
+
+export default suite({
+  name: "订单查询",
+
+  cases: [
+    // 参数化：一个模板，三行数据 → 三个测试用例
+    {
+      name: "查询 $orderId → 应调用 query_order",
+      params: [
+        { orderId: "ORD-001" },
+        { orderId: "ORD-002" },
+        { orderId: "ORD-999" },
+      ],
+      input: {
+        systemPrompt: "你是客服助手，用 query_order 查订单。",
+        messages: [{ role: "user", content: "帮我查 $orderId" }],
+        tools: [{ name: "query_order", description: "查订单", parameters: {} }],
+      },
+      assertions: [
+        assertions.toolCalled("query_order"),
+        assertions.contains("$orderId"),
+        assertions.latency(5000),
+      ],
+    },
+
+    // 普通测试用例可以和参数化用例混用
+    {
+      name: "不应主动取消订单",
+      input: { /* ... */ },
+      assertions: [assertions.toolNotCalled("cancel_order")],
+    },
+  ],
+});
+```
+
+`$paramName` 占位符可以出现在：
+- `name` — 测试名称
+- `input.systemPrompt`
+- `input.messages[].content`
+- `input.tools[].name` / `input.tools[].description`
+- `assertions.contains()` / `assertions.notContains()` 的 pattern
+- `assertions.toolCalled()` / `assertions.toolNotCalled()` 的 toolName
+
+参数行是 flat rows：每行是一个 `Record<string, string>`，生成一个测试用例。如果 `$param` 引用了不存在的 key，展开时会抛出明确错误。
+
+---
+
 ## 编写测试套件
 
 ### skip / only
@@ -496,7 +549,7 @@ interface AgentProvider {
 | **心智模型** | "哪个 prompt 更好" | "用 LLM 给模型打分" | **"改完之后坏没坏"** |
 | **断言方式** | 弱断言（contains / is-json） | LLM-as-Judge 为主 | **确定性规则为主** |
 | **Tool call 验证** | ❌ | ❌ | ✅ |
-| **参数化测试** | ❌ | ❌ | 🚧 计划中 |
+| **参数化测试** | ❌ | ❌ | ✅ |
 | **回归快照** | ❌ | ❌ | ✅ |
 | **边界注入** | ❌ | ❌ | 🚧 计划中 |
 | **CI 集成** | ✅ | ✅ | ✅ |
@@ -514,7 +567,7 @@ interface AgentProvider {
 | Anthropic Provider | ✅ 已完成 | 完整 tool calling 支持 |
 | CLI | ✅ 已完成 | TS/JS 双格式，JSON 输出，exit code |
 | 超时控制 | ✅ 已完成 | 每个用例独立超时 |
-| **参数化测试** | 🚧 计划中 | 同一模板 × 多组输入，批量生成测试变体 |
+| **参数化测试** | ✅ 已完成 | 同一模板 × 多组输入，批量生成测试变体 |
 | **回归快照** | ✅ 已完成 | 改 prompt 前后自动 diff 智能体行为变化 |
 | **边界注入** | 🚧 计划中 | Prompt 注入、超长上下文、编码攻击等对抗性输入 |
 | **循环检测断言** | 🚧 计划中 | 检测智能体是否陷入重复调用同一工具 |

@@ -5,6 +5,12 @@
       { "name": "query_order", "arguments": { "orderId": "ORD-001" } }
     ]
   },
+  "ORD-002": {
+    "content": "Your order ORD-002 has been shipped and is on the way.",
+    "toolCalls": [
+      { "name": "query_order", "arguments": { "orderId": "ORD-002" } }
+    ]
+  },
   "ORD-999": {
     "content": "I could not find order ORD-999 in our system. Could you double-check the order ID?",
     "toolCalls": [

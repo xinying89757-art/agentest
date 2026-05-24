@@ -104,6 +104,19 @@ export interface TestSuite {
   cases: TestCase[];
 }
 
+// ─── Parameterized Testing ───
+
+export type ParamRow = Record<string, string>;
+
+export interface ParamCase {
+  name: string;
+  params: ParamRow[];
+  input: AgentInput;
+  assertions: Assertion[];
+  skip?: boolean;
+  only?: boolean;
+}
+
 // ─── Run Result ───
 
 export interface RunResult {

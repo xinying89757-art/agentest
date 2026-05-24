@@ -1,4 +1,5 @@
-import type { TestCase, TestSuite } from "./types.js";
+import type { ParamCase, TestCase, TestSuite } from "./types.js";
+import { expandCase } from "./params.js";
 
 export * from "./types.js";
 export { AgentProvider } from "./providers/types.js";
@@ -23,7 +24,23 @@ export type {
   CaseDiff,
   SnapshotDiff,
 } from "./snapshot.js";
+export { expandCase, interpolateString } from "./params.js";
 
-export function suite(def: { name: string; cases: TestCase[] }): TestSuite {
-  return { name: def.name, cases: def.cases };
+function flatCases(
+  cases: (TestCase | ParamCase)[],
+): TestCase[] {
+  return cases.flatMap((c) =>
+    "params" in c && Array.isArray(c.params)
+      ? expandCase(c as ParamCase)
+      : [c as TestCase],
+  );
 }
+
+export function suite(def: {
+  name: string;
+  cases: (TestCase | ParamCase)[];
+}): TestSuite {
+  return { name: def.name, cases: flatCases(def.cases) };
+}
+
+suite.parametrized = (pc: ParamCase): TestCase[] => expandCase(pc);
