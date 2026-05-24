@@ -10,6 +10,19 @@ export { runSuite } from "./runner.js";
 export type { RunnerOptions } from "./runner.js";
 export { assertions } from "./assertions/index.js";
 export { Reporters } from "./reporter.js";
+export {
+  saveSnapshot,
+  loadSnapshot,
+  compareSnapshots,
+  snapshotPath,
+  jaccardSimilarity,
+} from "./snapshot.js";
+export type {
+  SnapshotCase,
+  SnapshotFile,
+  CaseDiff,
+  SnapshotDiff,
+} from "./snapshot.js";
 
 export function suite(def: { name: string; cases: TestCase[] }): TestSuite {
   return { name: def.name, cases: def.cases };

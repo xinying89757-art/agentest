@@ -1,5 +1,7 @@
 import chalk from "chalk";
 import type { SuiteResult } from "./types.js";
+import type { SnapshotDiff } from "./snapshot.js";
+import { CONTENT_SIMILARITY_THRESHOLD } from "./snapshot.js";
 
 function indent(text: string, level: number): string {
   return "  ".repeat(level) + text;
@@ -62,7 +64,67 @@ function formatJson(suite: SuiteResult): string {
   );
 }
 
+function snapshotDiff(diff: SnapshotDiff): string {
+  const lines: string[] = [];
+
+  lines.push("");
+  lines.push(chalk.bold(`Snapshot diff: ${diff.suiteName}`));
+  lines.push("");
+
+  for (const d of diff.diffs) {
+    let icon: string;
+    let desc: string;
+
+    switch (d.status) {
+      case "unchanged":
+        icon = chalk.green("✓");
+        desc = "unchanged";
+        break;
+      case "changed": {
+        const parts: string[] = [];
+        if (d.toolCallsChanged) parts.push("tool calls changed");
+        if (d.contentSimilarity < CONTENT_SIMILARITY_THRESHOLD)
+          parts.push(`content diverged (${Math.round(d.contentSimilarity * 100)}%)`);
+        if (d.passChanged) {
+          parts.push(
+            d.currentPassed
+              ? chalk.green("fail→pass")
+              : chalk.red("pass→fail (REGRESSION)"),
+          );
+        }
+        icon = chalk.yellow("~");
+        desc = parts.join(", ");
+        break;
+      }
+      case "new":
+        icon = chalk.blue("⊕");
+        desc = "new test, no baseline";
+        break;
+      case "removed":
+        icon = chalk.gray("⊖");
+        desc = "removed from suite";
+        break;
+    }
+
+    lines.push(indent(`${icon} ${d.testName} — ${desc}`, 1));
+  }
+
+  lines.push("");
+  const summary = [
+    chalk.green(`${diff.unchanged} unchanged`),
+    diff.changed > 0 ? chalk.yellow(`${diff.changed} changed`) : "",
+    diff.added > 0 ? chalk.blue(`${diff.added} added`) : "",
+    diff.removed > 0 ? chalk.gray(`${diff.removed} removed`) : "",
+    diff.regressions > 0 ? chalk.red(`${diff.regressions} regressions`) : "",
+  ].filter(Boolean);
+  lines.push(indent(summary.join(", "), 1));
+  lines.push("");
+
+  return lines.join("\n");
+}
+
 export const Reporters = {
   cli: formatCli,
   json: formatJson,
+  snapshotDiff,
 };

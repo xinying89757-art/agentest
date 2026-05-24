@@ -146,6 +146,58 @@ agentest run ./tests.test.ts --provider anthropic --model claude-opus-4-7 --time
 # （在测试文件中给指定用例加 only: true，其他用例自动跳过）
 ```
 
+### `agentest snapshot <action> <path>`
+
+```bash
+agentest snapshot save <path> [options]    # 运行测试并保存基线快照
+agentest snapshot diff <path> [options]    # 运行测试并与基线对比
+agentest snapshot update <path> [options]  # 运行测试并覆盖基线快照
+```
+
+回归快照用于在改 prompt 或换模型后，自动检测智能体行为是否发生了意外变化。
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `-p, --provider <name>` | Provider：`mock` 或 `anthropic` | `mock` |
+| `-m, --model <name>` | 模型名称（仅 Anthropic） | `claude-sonnet-4-6` |
+| `-t, --timeout <ms>` | 每个测试用例的超时（毫秒） | `30000` |
+| `--mock-response <json>` | 内联 mock 响应配置 | — |
+| `--mock-responses-file <path>` | JSON 文件配置 mock 响应 | — |
+| `--snapshot-dir <dir>` | 快照文件存放目录 | `./agentest-snapshots` |
+
+### Snapshot 工作流示例
+
+```bash
+# 1. 首次：建立基线
+agentest snapshot save ./tests.test.ts --provider mock --mock-responses-file ./responses.json
+
+# 2. 改了 prompt 后：检查行为变化
+agentest snapshot diff ./tests.test.ts --provider mock --mock-responses-file ./responses.json
+# ✓ unchanged: 4 tests
+
+# 3. 确认变更是预期行为后：更新基线
+agentest snapshot update ./tests.test.ts --provider mock --mock-responses-file ./responses.json
+```
+
+diff 输出示例：
+
+```text
+Snapshot diff: Customer Service Agent
+
+  ✓ handles non-existent order gracefully — unchanged
+  ✓ queries order for valid order ID — unchanged
+  ~ queries order returns structured JSON — tool calls changed, content diverged (42%), fail→pass
+  ⊕ new safety check test — new test, no baseline
+
+  2 unchanged, 1 changed, 1 added
+```
+
+对比维度：
+- **Tool calls 签名**：工具名称序列是否一致
+- **回复内容**：Jaccard 文本相似度（<60% 标记为 diverged）
+- **Pass/Fail 状态**：pass→fail 标记为 REGRESSION
+- **测试用例增减**：新增用例或删除用例都会被检测到
+
 ---
 
 ## 断言参考
@@ -445,7 +497,7 @@ interface AgentProvider {
 | **断言方式** | 弱断言（contains / is-json） | LLM-as-Judge 为主 | **确定性规则为主** |
 | **Tool call 验证** | ❌ | ❌ | ✅ |
 | **参数化测试** | ❌ | ❌ | 🚧 计划中 |
-| **回归快照** | ❌ | ❌ | 🚧 计划中 |
+| **回归快照** | ❌ | ❌ | ✅ |
 | **边界注入** | ❌ | ❌ | 🚧 计划中 |
 | **CI 集成** | ✅ | ✅ | ✅ |
 | **本地运行** | ✅ | ✅ | ✅ |
@@ -463,7 +515,7 @@ interface AgentProvider {
 | CLI | ✅ 已完成 | TS/JS 双格式，JSON 输出，exit code |
 | 超时控制 | ✅ 已完成 | 每个用例独立超时 |
 | **参数化测试** | 🚧 计划中 | 同一模板 × 多组输入，批量生成测试变体 |
-| **回归快照** | 🚧 计划中 | 改 prompt 前后自动 diff 智能体行为变化 |
+| **回归快照** | ✅ 已完成 | 改 prompt 前后自动 diff 智能体行为变化 |
 | **边界注入** | 🚧 计划中 | Prompt 注入、超长上下文、编码攻击等对抗性输入 |
 | **循环检测断言** | 🚧 计划中 | 检测智能体是否陷入重复调用同一工具 |
 | OpenAI Provider | 🚧 计划中 | 支持 GPT-4o 等模型 |

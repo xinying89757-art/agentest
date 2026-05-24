@@ -3,3 +3,4 @@ dist/
 *.tsbuildinfo
 examples/*.js
 examples/*.js.map
+agentest-snapshots/

@@ -75,7 +75,7 @@ async function runTestCase(
     passed: allPassed,
     assertions: assertionResults,
     durationMs: Date.now() - startTime,
-    agentOutput: allPassed ? undefined : agentOutput,
+    agentOutput,
   };
 }
 

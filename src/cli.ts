@@ -8,6 +8,7 @@ import { runSuite } from "./runner.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
 import { MockProvider } from "./providers/mock.js";
 import { Reporters } from "./reporter.js";
+import { saveSnapshot, loadSnapshot, compareSnapshots, snapshotPath } from "./snapshot.js";
 import type { TestSuite, ToolCall } from "./types.js";
 import type { AgentProvider } from "./providers/types.js";
 
@@ -56,6 +57,130 @@ program
       console.log(Reporters.cli(result));
     }
 
+    process.exit(result.failed > 0 ? 1 : 0);
+  });
+
+// ─── snapshot ───
+
+const snapshotCmd = program
+  .command("snapshot")
+  .description("Regression snapshot management");
+
+snapshotCmd
+  .command("save <path>")
+  .description("Run suite and save baseline snapshot")
+  .option("-p, --provider <name>", "provider: anthropic or mock", "mock")
+  .option("-m, --model <name>", "model name for the provider")
+  .option("-t, --timeout <ms>", "timeout per test case in ms", "30000")
+  .option("--mock-response <json>", "inline mock response config")
+  .option("--mock-responses-file <path>", "JSON file for mock responses")
+  .option("--snapshot-dir <dir>", "snapshot directory", "./agentest-snapshots")
+  .action(async (testPath: string, opts: {
+    provider: string;
+    model?: string;
+    timeout: string;
+    mockResponse?: string;
+    mockResponsesFile?: string;
+    snapshotDir: string;
+  }) => {
+    const absPath = resolve(testPath);
+    if (!existsSync(absPath)) {
+      console.error(`Error: file not found: ${absPath}`);
+      process.exit(1);
+    }
+
+    const suite = await loadSuite(absPath);
+    const provider = createProvider(opts);
+    const timeoutMs = parseInt(opts.timeout, 10);
+    const result = await runSuite(suite, provider, { timeout: timeoutMs });
+
+    const filePath = snapshotPath(result.suiteName, opts.snapshotDir);
+    saveSnapshot(result, opts.provider, opts.model ?? null, filePath);
+
+    console.log(`Snapshot saved: ${filePath}`);
+    console.log(Reporters.cli(result));
+    process.exit(result.failed > 0 ? 1 : 0);
+  });
+
+snapshotCmd
+  .command("diff <path>")
+  .description("Run suite and compare against baseline")
+  .option("-p, --provider <name>", "provider: anthropic or mock", "mock")
+  .option("-m, --model <name>", "model name for the provider")
+  .option("-t, --timeout <ms>", "timeout per test case in ms", "30000")
+  .option("--mock-response <json>", "inline mock response config")
+  .option("--mock-responses-file <path>", "JSON file for mock responses")
+  .option("--snapshot-dir <dir>", "snapshot directory", "./agentest-snapshots")
+  .action(async (testPath: string, opts: {
+    provider: string;
+    model?: string;
+    timeout: string;
+    mockResponse?: string;
+    mockResponsesFile?: string;
+    snapshotDir: string;
+  }) => {
+    const absPath = resolve(testPath);
+    if (!existsSync(absPath)) {
+      console.error(`Error: file not found: ${absPath}`);
+      process.exit(1);
+    }
+
+    const suite = await loadSuite(absPath);
+    const provider = createProvider(opts);
+    const timeoutMs = parseInt(opts.timeout, 10);
+    const result = await runSuite(suite, provider, { timeout: timeoutMs });
+
+    const filePath = snapshotPath(result.suiteName, opts.snapshotDir);
+    let previous;
+    try {
+      previous = loadSnapshot(filePath);
+    } catch {
+      console.error(`Error: no baseline snapshot found at ${filePath}`);
+      console.error("Run 'agentest snapshot save' first.");
+      process.exit(1);
+    }
+
+    const diff = compareSnapshots(result, previous);
+    diff.snapshotPath = filePath;
+
+    console.log(Reporters.cli(result));
+    console.log(Reporters.snapshotDiff(diff));
+    process.exit((result.failed > 0 || diff.changed > 0) ? 1 : 0);
+  });
+
+snapshotCmd
+  .command("update <path>")
+  .description("Run suite and overwrite baseline snapshot")
+  .option("-p, --provider <name>", "provider: anthropic or mock", "mock")
+  .option("-m, --model <name>", "model name for the provider")
+  .option("-t, --timeout <ms>", "timeout per test case in ms", "30000")
+  .option("--mock-response <json>", "inline mock response config")
+  .option("--mock-responses-file <path>", "JSON file for mock responses")
+  .option("--snapshot-dir <dir>", "snapshot directory", "./agentest-snapshots")
+  .action(async (testPath: string, opts: {
+    provider: string;
+    model?: string;
+    timeout: string;
+    mockResponse?: string;
+    mockResponsesFile?: string;
+    snapshotDir: string;
+  }) => {
+    const absPath = resolve(testPath);
+    if (!existsSync(absPath)) {
+      console.error(`Error: file not found: ${absPath}`);
+      process.exit(1);
+    }
+
+    const suite = await loadSuite(absPath);
+    const provider = createProvider(opts);
+    const timeoutMs = parseInt(opts.timeout, 10);
+    const result = await runSuite(suite, provider, { timeout: timeoutMs });
+
+    const filePath = snapshotPath(result.suiteName, opts.snapshotDir);
+    saveSnapshot(result, opts.provider, opts.model ?? null, filePath);
+
+    console.log(`Snapshot updated: ${filePath}`);
+    console.log(Reporters.cli(result));
     process.exit(result.failed > 0 ? 1 : 0);
   });
 
