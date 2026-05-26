@@ -121,9 +121,11 @@ agentest run <path> [options]
 
 | 选项 | 说明 | 默认值 |
 |------|------|--------|
-| `-p, --provider <name>` | Provider：`mock` 或 `anthropic` | `mock` |
-| `-m, --model <name>` | 模型名称（仅 Anthropic） | `claude-sonnet-4-6` |
+| `-p, --provider <name>` | Provider：`mock`、`anthropic` 或 `openai` | `mock` |
+| `-m, --model <name>` | 模型名称 | `claude-sonnet-4-6` / `gpt-4o` |
 | `-t, --timeout <ms>` | 每个测试用例的超时（毫秒） | `30000` |
+| `--base-url <url>` | OpenAI 兼容 API 的 Base URL（DeepSeek / Qwen / Ollama 等） | — |
+| `--concurrency <n>` | 最大并发用例数 | `5` |
 | `--mock-response <json>` | 内联 mock 响应配置 | — |
 | `--mock-responses-file <path>` | JSON 文件配置 mock 响应 | — |
 | `--json` | 以 JSON 格式输出结果 | — |
@@ -139,8 +141,19 @@ agentest run ./tests.test.ts --provider mock \
 agentest run ./tests.test.ts --provider mock \
   --mock-responses-file ./mock-responses.json
 
-# 指定模型和超时
+# 连接 Anthropic Claude
 agentest run ./tests.test.ts --provider anthropic --model claude-opus-4-7 --timeout 15000
+
+# 连接 DeepSeek（OpenAI 兼容格式）
+export OPENAI_API_KEY=sk-...
+agentest run ./tests.test.ts --provider openai \
+  --model deepseek-chat \
+  --base-url https://api.deepseek.com/v1
+
+# 连接本地 Ollama
+agentest run ./tests.test.ts --provider openai \
+  --model llama3 \
+  --base-url http://localhost:11434/v1
 
 # 只运行标记了 only 的用例
 # （在测试文件中给指定用例加 only: true，其他用例自动跳过）
@@ -158,9 +171,10 @@ agentest snapshot update <path> [options]  # 运行测试并覆盖基线快照
 
 | 选项 | 说明 | 默认值 |
 |------|------|--------|
-| `-p, --provider <name>` | Provider：`mock` 或 `anthropic` | `mock` |
-| `-m, --model <name>` | 模型名称（仅 Anthropic） | `claude-sonnet-4-6` |
+| `-p, --provider <name>` | Provider：`mock`、`anthropic` 或 `openai` | `mock` |
+| `-m, --model <name>` | 模型名称 | `claude-sonnet-4-6` / `gpt-4o` |
 | `-t, --timeout <ms>` | 每个测试用例的超时（毫秒） | `30000` |
+| `--base-url <url>` | OpenAI 兼容 API 的 Base URL | — |
 | `--mock-response <json>` | 内联 mock 响应配置 | — |
 | `--mock-responses-file <path>` | JSON 文件配置 mock 响应 | — |
 | `--snapshot-dir <dir>` | 快照文件存放目录 | `./agentest-snapshots` |
@@ -202,7 +216,7 @@ Snapshot diff: Customer Service Agent
 
 ## 断言参考
 
-全部 7 种断言都是**确定性规则**——不依赖 LLM，每次运行结果一致。
+全部 8 种断言都是**确定性规则**——不依赖 LLM，每次运行结果一致。
 
 ### `contains(pattern)`
 
@@ -252,6 +266,24 @@ assertions.toolCalled("query_order")
 ```ts
 assertions.toolNotCalled("cancel_order")
 assertions.toolNotCalled("delete_user")
+```
+
+### `toolCalledWith(name, zodSchema)`
+
+验证智能体调用了指定工具，且**调用参数符合 Zod Schema**。语义：只要存在至少一次调用且参数通过 Schema，即通过，适合同名工具被多次调用的场景。
+
+```ts
+import { z } from "zod";
+
+assertions.toolCalledWith("query_order", z.object({
+  orderId: z.string().startsWith("ORD-"),
+}))
+
+// 多次调用时，只要其中一次参数通过 Schema 即可
+assertions.toolCalledWith("search", z.object({
+  query: z.string().min(1),
+  limit: z.number().max(10),
+}))
 ```
 
 ### `latency(thresholdMs)`
@@ -394,10 +426,11 @@ console.log(Reporters.json(result));
 | 导出 | 类型 | 说明 |
 |------|------|------|
 | `suite(def)` | Function | 创建测试套件 |
-| `assertions` | Object | 断言构建器（7 个方法） |
+| `assertions` | Object | 断言构建器（8 个方法） |
 | `runSuite(suite, provider, opts?)` | Function | 执行测试套件 |
 | `MockProvider` | Class | Mock provider |
 | `AnthropicProvider` | Class | Anthropic provider |
+| `OpenAIProvider` | Class | OpenAI 兼容 provider（支持 DeepSeek / Qwen / Ollama 等） |
 | `Reporters.cli(result)` | Function | 终端彩色输出 |
 | `Reporters.json(result)` | Function | JSON 格式输出 |
 | `AgentProvider` | Interface | Provider 接口（扩展用） |
@@ -451,7 +484,7 @@ export default suite({
 - `input.messages[].content`
 - `input.tools[].name` / `input.tools[].description`
 - `assertions.contains()` / `assertions.notContains()` 的 pattern
-- `assertions.toolCalled()` / `assertions.toolNotCalled()` 的 toolName
+- `assertions.toolCalled()` / `assertions.toolNotCalled()` / `assertions.toolCalledWith()` 的 toolName
 
 参数行是 flat rows：每行是一个 `Record<string, string>`，生成一个测试用例。如果 `$param` 引用了不存在的 key，展开时会抛出明确错误。
 
@@ -485,7 +518,7 @@ cases: [
 
 ```
 1. 用 mock provider 写测试，验证断言逻辑本身没写错
-2. 切到 Anthropic provider 跑真实评估
+2. 切到 Anthropic / OpenAI provider 跑真实评估
 3. 放入 CI：每次改 prompt / 换模型 → 自动跑 → 不通过就拦截
 ```
 
@@ -512,7 +545,7 @@ cases: [
                         │  └──────────┘│
                         │              │
   AgentProvider ◀───────┤  Provider    │
-  (Anthropic / Mock)    └──────────────┘
+  (Anthropic / OpenAI / Mock)    └──────────────┘
 ```
 
 ### 三层设计
@@ -522,13 +555,13 @@ cases: [
 ```ts
 interface AgentProvider {
   readonly name: string;
-  run(input: AgentInput): Promise<AgentOutput>;
+  run(input: AgentInput, signal?: AbortSignal): Promise<AgentOutput>;
 }
 ```
 
 - `AnthropicProvider`：封装 `@anthropic-ai/sdk`，完整支持 tool calling
-- `MockProvider`：关键词匹配返回预设响应，零 API 成本
-- 计划中的 `OpenAIProvider` 只需实现同一接口
+- `OpenAIProvider`：通过原生 `fetch` 调用，支持 `baseURL` 参数兼容所有 OpenAI 格式接口（DeepSeek、Qwen、Ollama、Azure OpenAI 等）
+- `MockProvider`：关键词匹配（最长 Key 优先）返回预设响应，零 API 成本
 
 **断言层** — 全部是纯函数，输入 `AgentOutput`，输出 `AssertionResult`。不依赖 LLM，不调外部 API，可复现。
 
@@ -562,16 +595,18 @@ interface AgentProvider {
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
-| 7 种确定性断言 | ✅ 已完成 | contains, notContains, schemaMatch, toolCalled, toolNotCalled, latency, tokenUsage |
-| Mock Provider | ✅ 已完成 | 关键词匹配，支持 JSON 配置文件 |
-| Anthropic Provider | ✅ 已完成 | 完整 tool calling 支持 |
-| CLI | ✅ 已完成 | TS/JS 双格式，JSON 输出，exit code |
-| 超时控制 | ✅ 已完成 | 每个用例独立超时 |
+| 8 种确定性断言 | ✅ 已完成 | contains, notContains, schemaMatch, toolCalled, toolNotCalled, toolCalledWith, latency, tokenUsage |
+| Mock Provider | ✅ 已完成 | 最长 Key 优先匹配，支持 JSON 配置文件 |
+| Anthropic Provider | ✅ 已完成 | 完整 tool calling 支持，超时时真正取消 HTTP 请求 |
+| **OpenAI Provider** | ✅ 已完成 | 支持 GPT-4o / DeepSeek / Qwen / Ollama 等所有 OpenAI 兼容格式 |
+| CLI | ✅ 已完成 | TS/JS 双格式，JSON 输出，exit code，`--base-url` |
+| 超时控制 | ✅ 已完成 | 每个用例独立超时，超时后取消底层 HTTP 请求 |
+| 并发执行 | ✅ 已完成 | 默认并发 5，可通过 `concurrency` 选项配置 |
 | **参数化测试** | ✅ 已完成 | 同一模板 × 多组输入，批量生成测试变体 |
-| **回归快照** | ✅ 已完成 | 改 prompt 前后自动 diff 智能体行为变化 |
+| **回归快照** | ✅ 已完成 | 改 prompt 前后自动 diff；快照 Key 基于 input 哈希，重命名用例不丢失基线 |
+| **框架单元测试** | ✅ 已完成 | 36 个单元测试，覆盖全部断言、MockProvider、快照工具函数 |
 | **边界注入** | 🚧 计划中 | Prompt 注入、超长上下文、编码攻击等对抗性输入 |
 | **循环检测断言** | 🚧 计划中 | 检测智能体是否陷入重复调用同一工具 |
-| OpenAI Provider | 🚧 计划中 | 支持 GPT-4o 等模型 |
 | Markdown 报告 | 🚧 计划中 | `--report markdown` 输出可存档的报告 |
 
 ---
