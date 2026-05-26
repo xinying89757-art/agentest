@@ -2,7 +2,7 @@ import type { Assertion, AgentOutput, AssertionResult } from "../types.js";
 import { z } from "zod";
 import { validateSchema } from "./schema.js";
 import { validateContains, validateNotContains } from "./content.js";
-import { validateToolCalled, validateToolNotCalled } from "./tool-calls.js";
+import { validateToolCalled, validateToolNotCalled, validateToolCalledWith } from "./tool-calls.js";
 import { validateLatency, validateTokenUsage } from "./performance.js";
 
 function runSingle(output: AgentOutput, assertion: Assertion): AssertionResult {
@@ -12,6 +12,7 @@ function runSingle(output: AgentOutput, assertion: Assertion): AssertionResult {
     case "not-contains":       return validateNotContains(output, assertion);
     case "tool-called":        return validateToolCalled(output, assertion);
     case "tool-not-called":    return validateToolNotCalled(output, assertion);
+    case "tool-called-with":   return validateToolCalledWith(output, assertion);
     case "latency":            return validateLatency(output, assertion);
     case "token-usage":        return validateTokenUsage(output, assertion);
   }
@@ -39,6 +40,9 @@ export const assertions = {
 
   toolNotCalled: (toolName: string) =>
     ({ type: "tool-not-called", toolName } as const),
+
+  toolCalledWith: (toolName: string, schema: z.ZodType<unknown>) =>
+    ({ type: "tool-called-with", toolName, schema } as const),
 
   latency: (thresholdMs: number) =>
     ({ type: "latency", thresholdMs } as const),

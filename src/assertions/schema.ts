@@ -16,7 +16,13 @@ export function validateSchema(
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(lastMessage.content);
+    // Real model output is almost always wrapped in a Markdown code block:
+    //   ```json\n{ ... }\n```
+    // Attempt to extract the JSON from the code block first; fall back to
+    // parsing the raw string so both formats are handled transparently.
+    const markdown = lastMessage.content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const raw = markdown ? markdown[1].trim() : lastMessage.content.trim();
+    parsed = JSON.parse(raw);
   } catch {
     return {
       name: "schema-match",

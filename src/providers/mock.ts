@@ -21,7 +21,9 @@ export class MockProvider implements AgentProvider {
     this.responses = options.responses ?? new Map();
   }
 
-  async run(input: AgentInput): Promise<AgentOutput> {
+  // signal is accepted to satisfy the AgentProvider interface but is not
+  // needed here since MockProvider performs no network I/O.
+  async run(input: AgentInput, _signal?: AbortSignal): Promise<AgentOutput> {
     const lastUserMessage = input.messages
       .filter((m) => m.role === "user")
       .at(-1)
@@ -41,9 +43,20 @@ export class MockProvider implements AgentProvider {
   }
 
   private findResponse(message: string): MockResponse {
+    // Collect all matching keys, then pick the longest one.
+    // This prevents short keys (e.g. "ORD") from shadowing more-specific longer
+    // keys (e.g. "ORD-001") when both appear in responses, making matching
+    // deterministic regardless of insertion order.
+    let bestKey = "";
+    let bestValue: MockResponse | undefined;
+
     for (const [key, value] of this.responses) {
-      if (message.includes(key)) return value;
+      if (message.includes(key) && key.length > bestKey.length) {
+        bestKey = key;
+        bestValue = value;
+      }
     }
-    return this.defaultResponse;
+
+    return bestValue ?? this.defaultResponse;
   }
 }

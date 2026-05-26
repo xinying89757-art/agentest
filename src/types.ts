@@ -60,6 +60,13 @@ export interface ToolNotCalledAssertion {
   toolName: string;
 }
 
+export interface ToolCalledWithAssertion {
+  type: "tool-called-with";
+  toolName: string;
+  /** Zod schema to validate the tool call arguments against. */
+  schema: z.ZodType<unknown>;
+}
+
 export interface LatencyAssertion {
   type: "latency";
   thresholdMs: number;
@@ -76,6 +83,7 @@ export type Assertion =
   | NotContainsAssertion
   | ToolCalledAssertion
   | ToolNotCalledAssertion
+  | ToolCalledWithAssertion
   | LatencyAssertion
   | TokenUsageAssertion;
 
@@ -135,4 +143,6 @@ export interface SuiteResult {
   skipped: number;
   results: RunResult[];
   durationMs: number;
+  /** testName → SHA-256 hash of AgentInput content (first 12 chars). Used for stable snapshot keys. */
+  inputHashes: Map<string, string>;
 }

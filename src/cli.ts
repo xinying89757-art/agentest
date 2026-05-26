@@ -7,6 +7,7 @@ import { createJiti } from "jiti";
 import { runSuite } from "./runner.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
 import { MockProvider } from "./providers/mock.js";
+import { OpenAIProvider } from "./providers/openai.js";
 import { Reporters } from "./reporter.js";
 import { saveSnapshot, loadSnapshot, compareSnapshots, snapshotPath } from "./snapshot.js";
 import type { TestSuite, ToolCall } from "./types.js";
@@ -24,9 +25,10 @@ program
 program
   .command("run <path>")
   .description("Run a test suite (.ts or .js)")
-  .option("-p, --provider <name>", "provider: anthropic or mock", "mock")
+  .option("-p, --provider <name>", "provider: anthropic, openai, or mock", "mock")
   .option("-m, --model <name>", "model name for the provider")
   .option("-t, --timeout <ms>", "timeout per test case in ms", "30000")
+  .option("--base-url <url>", "base URL for OpenAI-compatible provider (e.g. https://api.deepseek.com/v1)")
   .option("--mock-response <json>", 'mock response config, e.g. \'{"content":"ok","toolCalls":[{"name":"query_order","arguments":{}}]}\'')
   .option("--mock-responses-file <path>", "JSON file mapping input patterns to mock responses")
   .option("--json", "output as JSON")
@@ -34,6 +36,7 @@ program
     provider: string;
     model?: string;
     timeout: string;
+    baseUrl?: string;
     mockResponse?: string;
     mockResponsesFile?: string;
     json?: boolean;
@@ -69,9 +72,10 @@ const snapshotCmd = program
 snapshotCmd
   .command("save <path>")
   .description("Run suite and save baseline snapshot")
-  .option("-p, --provider <name>", "provider: anthropic or mock", "mock")
+  .option("-p, --provider <name>", "provider: anthropic, openai, or mock", "mock")
   .option("-m, --model <name>", "model name for the provider")
   .option("-t, --timeout <ms>", "timeout per test case in ms", "30000")
+  .option("--base-url <url>", "base URL for OpenAI-compatible provider")
   .option("--mock-response <json>", "inline mock response config")
   .option("--mock-responses-file <path>", "JSON file for mock responses")
   .option("--snapshot-dir <dir>", "snapshot directory", "./agentest-snapshots")
@@ -79,6 +83,7 @@ snapshotCmd
     provider: string;
     model?: string;
     timeout: string;
+    baseUrl?: string;
     mockResponse?: string;
     mockResponsesFile?: string;
     snapshotDir: string;
@@ -95,7 +100,7 @@ snapshotCmd
     const result = await runSuite(suite, provider, { timeout: timeoutMs });
 
     const filePath = snapshotPath(result.suiteName, opts.snapshotDir);
-    saveSnapshot(result, opts.provider, opts.model ?? null, filePath);
+    saveSnapshot(result, opts.provider, opts.model ?? null, filePath, result.inputHashes);
 
     console.log(`Snapshot saved: ${filePath}`);
     console.log(Reporters.cli(result));
@@ -105,9 +110,10 @@ snapshotCmd
 snapshotCmd
   .command("diff <path>")
   .description("Run suite and compare against baseline")
-  .option("-p, --provider <name>", "provider: anthropic or mock", "mock")
+  .option("-p, --provider <name>", "provider: anthropic, openai, or mock", "mock")
   .option("-m, --model <name>", "model name for the provider")
   .option("-t, --timeout <ms>", "timeout per test case in ms", "30000")
+  .option("--base-url <url>", "base URL for OpenAI-compatible provider")
   .option("--mock-response <json>", "inline mock response config")
   .option("--mock-responses-file <path>", "JSON file for mock responses")
   .option("--snapshot-dir <dir>", "snapshot directory", "./agentest-snapshots")
@@ -115,6 +121,7 @@ snapshotCmd
     provider: string;
     model?: string;
     timeout: string;
+    baseUrl?: string;
     mockResponse?: string;
     mockResponsesFile?: string;
     snapshotDir: string;
@@ -140,7 +147,7 @@ snapshotCmd
       process.exit(1);
     }
 
-    const diff = compareSnapshots(result, previous);
+    const diff = compareSnapshots(result, previous, result.inputHashes);
     diff.snapshotPath = filePath;
 
     console.log(Reporters.cli(result));
@@ -151,9 +158,10 @@ snapshotCmd
 snapshotCmd
   .command("update <path>")
   .description("Run suite and overwrite baseline snapshot")
-  .option("-p, --provider <name>", "provider: anthropic or mock", "mock")
+  .option("-p, --provider <name>", "provider: anthropic, openai, or mock", "mock")
   .option("-m, --model <name>", "model name for the provider")
   .option("-t, --timeout <ms>", "timeout per test case in ms", "30000")
+  .option("--base-url <url>", "base URL for OpenAI-compatible provider")
   .option("--mock-response <json>", "inline mock response config")
   .option("--mock-responses-file <path>", "JSON file for mock responses")
   .option("--snapshot-dir <dir>", "snapshot directory", "./agentest-snapshots")
@@ -161,6 +169,7 @@ snapshotCmd
     provider: string;
     model?: string;
     timeout: string;
+    baseUrl?: string;
     mockResponse?: string;
     mockResponsesFile?: string;
     snapshotDir: string;
@@ -177,7 +186,7 @@ snapshotCmd
     const result = await runSuite(suite, provider, { timeout: timeoutMs });
 
     const filePath = snapshotPath(result.suiteName, opts.snapshotDir);
-    saveSnapshot(result, opts.provider, opts.model ?? null, filePath);
+    saveSnapshot(result, opts.provider, opts.model ?? null, filePath, result.inputHashes);
 
     console.log(`Snapshot updated: ${filePath}`);
     console.log(Reporters.cli(result));
@@ -197,12 +206,19 @@ async function loadSuite(path: string): Promise<TestSuite> {
 function createProvider(opts: {
   provider: string;
   model?: string;
+  baseUrl?: string;
   mockResponse?: string;
   mockResponsesFile?: string;
 }): AgentProvider {
   switch (opts.provider) {
     case "anthropic":
       return new AnthropicProvider({ model: opts.model });
+
+    case "openai":
+      return new OpenAIProvider({
+        model: opts.model,
+        baseURL: opts.baseUrl,
+      });
 
     case "mock": {
       let defaultResponse = { content: "Mock response" };

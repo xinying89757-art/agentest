@@ -1,9 +1,14 @@
 import type { ContainsAssertion, NotContainsAssertion, AssertionResult, AgentOutput } from "../types.js";
 
 function getResponseText(output: AgentOutput): string {
-  const lastMessage = output.messages.at(-1);
-  if (!lastMessage || lastMessage.role !== "assistant") return "";
-  return lastMessage.content;
+  // Collect all assistant message content, not just the last message.
+  // When the model's final turn is a tool_use block (no text), at(-1) would
+  // return an empty string or a non-assistant message, causing contains to
+  // silently fail and notContains to silently pass.
+  return output.messages
+    .filter((m) => m.role === "assistant" && m.content.length > 0)
+    .map((m) => m.content)
+    .join("\n");
 }
 
 export function validateContains(

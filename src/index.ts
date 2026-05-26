@@ -7,6 +7,8 @@ export { MockProvider } from "./providers/mock.js";
 export type { MockResponse, MockProviderOptions } from "./providers/mock.js";
 export { AnthropicProvider } from "./providers/anthropic.js";
 export type { AnthropicProviderOptions } from "./providers/anthropic.js";
+export { OpenAIProvider } from "./providers/openai.js";
+export type { OpenAIProviderOptions } from "./providers/openai.js";
 export { runSuite } from "./runner.js";
 export type { RunnerOptions } from "./runner.js";
 export { assertions } from "./assertions/index.js";

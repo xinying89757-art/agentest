@@ -25,6 +25,7 @@ function interpolateAssertion(a: Assertion, params: ParamRow): Assertion {
         : { ...a };
     case "tool-called":
     case "tool-not-called":
+    case "tool-called-with":
       return { ...a, toolName: interpolateString(a.toolName, params) };
     case "schema-match":
     case "latency":

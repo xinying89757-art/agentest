@@ -25,7 +25,7 @@ export class AnthropicProvider implements AgentProvider {
     this.maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
   }
 
-  async run(input: AgentInput): Promise<AgentOutput> {
+  async run(input: AgentInput, signal?: AbortSignal): Promise<AgentOutput> {
     const startTime = Date.now();
 
     const systemPrompt = input.systemPrompt;
@@ -46,13 +46,19 @@ export class AnthropicProvider implements AgentProvider {
       },
     }));
 
-    const response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: this.maxTokens,
-      system: systemPrompt,
-      messages: messages as Anthropic.MessageParam[],
-      tools: anthropicTools as Anthropic.Tool[],
-    });
+    const response = await this.client.messages.create(
+      {
+        model: this.model,
+        max_tokens: this.maxTokens,
+        system: systemPrompt,
+        messages: messages as Anthropic.MessageParam[],
+        tools: anthropicTools as Anthropic.Tool[],
+      },
+      // Pass the AbortSignal so that when the Runner times out and calls
+      // abort(), the underlying HTTP request is truly cancelled rather than
+      // continuing to run (and consume tokens) in the background.
+      { signal },
+    );
 
     const durationMs = Date.now() - startTime;
 
